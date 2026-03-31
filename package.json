@@ -1,0 +1,46 @@
+{
+  "name": "mem-persistence",
+  "version": "0.0.1",
+  "description": "Persistent memory MCP server for AI agents — one memory, every agent, your files",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "mem-persistence": "dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js",
+    "test": "vitest",
+    "lint": "eslint src/"
+  },
+  "keywords": [
+    "mcp",
+    "memory",
+    "ai",
+    "agents",
+    "markdown",
+    "persistent-memory",
+    "claude",
+    "cursor",
+    "openclaw"
+  ],
+  "author": "Emilio Torrens <emilio@torrens.dev>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/emiliotorrens/mem-persistence.git"
+  },
+  "homepage": "https://github.com/emiliotorrens/mem-persistence",
+  "bugs": {
+    "url": "https://github.com/emiliotorrens/mem-persistence/issues"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE"
+  ]
+}
