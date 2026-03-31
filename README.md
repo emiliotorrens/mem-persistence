@@ -54,9 +54,42 @@ npm run build
 
 ### Claude Desktop
 
-Add to your config file:
+**Option A — HTTP mode (recommended)**
+
+Start the server once as a background service, then point Claude Desktop to it:
+
+```bash
+# 1. Start the server (with pm2 for persistence across restarts)
+npm install -g pm2
+pm2 start dist/index.js --name mem-persistence -- \
+  --workspace /path/to/workspace \
+  --port 3456 \
+  --host 127.0.0.1   # use 0.0.0.0 for Tailscale/remote access
+pm2 save
+
+# Optional: enable embeddings (Gemini is free)
+# Pass via ecosystem.config.cjs — see ecosystem.config.cjs.example
+```
+
+Then add to your Claude Desktop config:
 - **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
 - **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
+
+```json
+{
+  "mcpServers": {
+    "memory": {
+      "url": "http://127.0.0.1:3456/mem-persistence/mcp"
+    }
+  }
+}
+```
+
+No API keys in the client config. Embeddings are handled by the server.
+
+**Option B — stdio mode**
+
+Claude Desktop spawns the process on demand. Simpler to set up, but a new process per window and you must include API keys in the client config.
 
 ```json
 {
@@ -67,7 +100,11 @@ Add to your config file:
         "/path/to/mem-persistence/dist/index.js",
         "--workspace",
         "/path/to/your/workspace"
-      ]
+      ],
+      "env": {
+        "MEM_PERSISTENCE_EMBEDDINGS": "gemini",
+        "GOOGLE_API_KEY": "your-key-here"
+      }
     }
   }
 }

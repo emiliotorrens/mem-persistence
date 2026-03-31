@@ -1,0 +1,28 @@
+// ecosystem.config.cjs — pm2 config for mem-persistence HTTP server
+// Copy this file to ecosystem.config.cjs and fill in your values.
+// ecosystem.config.cjs is gitignored (never commit API keys).
+
+module.exports = {
+  apps: [{
+    name: "mem-persistence",
+    script: "/path/to/mem-persistence/dist/index.js",
+    interpreter: "node",
+    args: "--workspace /path/to/your/workspace --port 3456 --host 127.0.0.1",
+    // Use --host 0.0.0.0 to expose over Tailscale/VPN (see README)
+    env: {
+      // Optional: enable semantic search (Gemini is free)
+      // MEM_PERSISTENCE_EMBEDDINGS: "gemini",
+      // GOOGLE_API_KEY: "your-google-api-key",
+
+      // Optional: use OpenAI instead
+      // MEM_PERSISTENCE_EMBEDDINGS: "openai",
+      // OPENAI_API_KEY: "your-openai-api-key",
+
+      // Optional: custom dedup threshold (default: 0.65)
+      // MEM_PERSISTENCE_DEDUP_THRESHOLD: "0.65",
+    },
+    restart_delay: 5000,
+    max_restarts: 10,
+    autorestart: true
+  }]
+};
