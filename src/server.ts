@@ -1,16 +1,61 @@
 /**
- * server.ts — MCP Server exposing memory tools
+ * server.ts — MCP Server exposing memory tools with request/response logging
  */
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import * as memory from "./memory.js";
+import { initLogger, log } from "./logger.js";
 
-export function createServer(config: memory.MemoryConfig): McpServer {
+export function createServer(
+  config: memory.MemoryConfig,
+  options?: { logging?: boolean }
+): McpServer {
+  initLogger(config.workspace, options?.logging !== false);
+
   const server = new McpServer({
     name: "mem-persistence",
     version: "0.1.0",
   });
+
+  /** Helper: wrap handler with logging */
+  function logged<A extends Record<string, any>>(
+    toolName: string,
+    handler: (args: A) => Promise<any>
+  ): (args: A) => Promise<any> {
+    return async (args: A) => {
+      const start = Date.now();
+      try {
+        const result = await handler(args);
+        const size = result.content.reduce((a: number, c: any) => a + (c.text?.length ?? 0), 0);
+        log({
+          timestamp: new Date().toISOString(),
+          tool: toolName,
+          args: truncateArgs(args),
+          result: { success: !result.isError, resultSize: size },
+          durationMs: Date.now() - start,
+        });
+        return result;
+      } catch (err: any) {
+        log({
+          timestamp: new Date().toISOString(),
+          tool: toolName,
+          args: truncateArgs(args),
+          result: { success: false, error: err.message },
+          durationMs: Date.now() - start,
+        });
+        throw err;
+      }
+    };
+  }
+
+  function truncateArgs(args: Record<string, any>): Record<string, unknown> {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(args)) {
+      out[k] = typeof v === "string" && v.length > 500 ? v.slice(0, 500) + `...(${v.length})` : v;
+    }
+    return out;
+  }
 
   // ─── memory_search ──────────────────────────────────────────────────────
 
@@ -19,29 +64,15 @@ export function createServer(config: memory.MemoryConfig): McpServer {
     "Search across all memory layers (L1 core, L2 topics/dailies, L3 references) with token-based ranking and temporal decay for recent notes.",
     {
       query: z.string().describe("Search query text"),
-      maxResults: z
-        .number()
-        .optional()
-        .describe("Max results to return (default: 20)"),
-      layers: z
-        .array(z.enum(["L1", "L2", "L3"]))
-        .optional()
-        .describe("Filter by layers (default: all)"),
+      maxResults: z.number().optional().describe("Max results to return (default: 20)"),
+      layers: z.array(z.enum(["L1", "L2", "L3"])).optional().describe("Filter by layers (default: all)"),
     },
-    async ({ query, maxResults, layers }) => {
-      const results = await memory.search(query, config, {
-        maxResults,
-        layers,
-      });
+    logged("memory_search", async ({ query, maxResults, layers }) => {
+      const results = await memory.search(query, config, { maxResults, layers });
       return {
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify(results, null, 2),
-          },
-        ],
+        content: [{ type: "text" as const, text: JSON.stringify(results, null, 2) }],
       };
-    }
+    })
   );
 
   // ─── memory_read ────────────────────────────────────────────────────────
@@ -50,22 +81,15 @@ export function createServer(config: memory.MemoryConfig): McpServer {
     "memory_read",
     "Read a specific memory file by path (relative to workspace). Supports line range filtering.",
     {
-      path: z
-        .string()
-        .describe("File path relative to workspace (e.g. 'MEMORY.md', 'memory/2026-03-31.md')"),
+      path: z.string().describe("File path relative to workspace (e.g. 'MEMORY.md', 'memory/2026-03-31.md')"),
       startLine: z.number().optional().describe("Start line (1-indexed)"),
       endLine: z.number().optional().describe("End line (inclusive)"),
     },
-    async ({ path, startLine, endLine }) => {
+    logged("memory_read", async ({ path, startLine, endLine }) => {
       try {
         const result = await memory.read(path, config, { startLine, endLine });
         return {
-          content: [
-            {
-              type: "text" as const,
-              text: `[${result.layer}] ${path} (${result.lines} lines)\n\n${result.content}`,
-            },
-          ],
+          content: [{ type: "text" as const, text: `[${result.layer}] ${path} (${result.lines} lines)\n\n${result.content}` }],
         };
       } catch (e: any) {
         return {
@@ -73,7 +97,7 @@ export function createServer(config: memory.MemoryConfig): McpServer {
           isError: true,
         };
       }
-    }
+    })
   );
 
   // ─── memory_write ───────────────────────────────────────────────────────
@@ -82,42 +106,25 @@ export function createServer(config: memory.MemoryConfig): McpServer {
     "memory_write",
     "Write content to a memory file. Automatically checks for duplicates when writing to MEMORY.md. Use append mode to add to existing files.",
     {
-      path: z
-        .string()
-        .describe("File path relative to workspace"),
+      path: z.string().describe("File path relative to workspace"),
       content: z.string().describe("Content to write"),
-      append: z
-        .boolean()
-        .optional()
-        .describe("Append to existing file (default: false)"),
-      dedupCheck: z
-        .boolean()
-        .optional()
-        .describe("Check for duplicates against MEMORY.md (default: true)"),
+      append: z.boolean().optional().describe("Append to existing file (default: false)"),
+      dedupCheck: z.boolean().optional().describe("Check for duplicates against MEMORY.md (default: true)"),
     },
-    async ({ path, content, append, dedupCheck }) => {
+    logged("memory_write", async ({ path, content, append, dedupCheck }) => {
       try {
-        const result = await memory.write(path, content, config, {
-          append,
-          dedupCheck,
-        });
+        const result = await memory.write(path, content, config, { append, dedupCheck });
         const msg = result.written
           ? `✅ Written to ${result.path}`
           : `⏭️ Nothing written (all content was duplicate)`;
-        const filteredMsg =
-          result.filtered.length > 0
-            ? `\nFiltered ${result.filtered.length} duplicate(s):\n${result.filtered.map((f) => `  - ${f}`).join("\n")}`
-            : "";
-        return {
-          content: [{ type: "text" as const, text: msg + filteredMsg }],
-        };
+        const filteredMsg = result.filtered.length > 0
+          ? `\nFiltered ${result.filtered.length} duplicate(s):\n${result.filtered.map((f) => `  - ${f}`).join("\n")}`
+          : "";
+        return { content: [{ type: "text" as const, text: msg + filteredMsg }] };
       } catch (e: any) {
-        return {
-          content: [{ type: "text" as const, text: `Error: ${e.message}` }],
-          isError: true,
-        };
+        return { content: [{ type: "text" as const, text: `Error: ${e.message}` }], isError: true };
       }
-    }
+    })
   );
 
   // ─── memory_checkpoint ──────────────────────────────────────────────────
@@ -126,21 +133,12 @@ export function createServer(config: memory.MemoryConfig): McpServer {
     "memory_checkpoint",
     "Save a context checkpoint to today's daily note (memory/YYYY-MM-DD.md). Use for preserving important context during long sessions.",
     {
-      content: z
-        .string()
-        .describe("Checkpoint content (decisions, actions, facts, pending items)"),
+      content: z.string().describe("Checkpoint content (decisions, actions, facts, pending items)"),
     },
-    async ({ content }) => {
+    logged("memory_checkpoint", async ({ content }) => {
       const result = await memory.checkpoint(content, config);
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: `✅ Checkpoint saved to ${result.path}`,
-          },
-        ],
-      };
-    }
+      return { content: [{ type: "text" as const, text: `✅ Checkpoint saved to ${result.path}` }] };
+    })
   );
 
   // ─── memory_entities ────────────────────────────────────────────────────
@@ -149,28 +147,18 @@ export function createServer(config: memory.MemoryConfig): McpServer {
     "memory_entities",
     "Read or update the knowledge graph (reference/entities.md). Lists entity sections or retrieves/updates a specific section.",
     {
-      section: z
-        .string()
-        .optional()
-        .describe("Section name to read/update (e.g. 'Personas', 'Proyectos')"),
-      update: z
-        .string()
-        .optional()
-        .describe("Content to append to the section (requires section)"),
+      section: z.string().optional().describe("Section name to read/update (e.g. 'Personas', 'Proyectos')"),
+      update: z.string().optional().describe("Content to append to the section (requires section)"),
     },
-    async ({ section, update }) => {
+    logged("memory_entities", async ({ section, update }) => {
       const result = await memory.entities(config, { section, update });
       return {
-        content: [
-          {
-            type: "text" as const,
-            text: update
-              ? `✅ Updated section "${section}"\n\n${result.content}`
-              : result.content,
-          },
-        ],
+        content: [{
+          type: "text" as const,
+          text: update ? `✅ Updated section "${section}"\n\n${result.content}` : result.content,
+        }],
       };
-    }
+    })
   );
 
   // ─── memory_status ──────────────────────────────────────────────────────
@@ -179,7 +167,7 @@ export function createServer(config: memory.MemoryConfig): McpServer {
     "memory_status",
     "Get an overview of the memory system: file counts, line counts, last daily note, entities sections.",
     {},
-    async () => {
+    logged("memory_status", async () => {
       const s = await memory.status(config);
       const text = [
         `📁 Workspace: ${s.workspace}`,
@@ -190,7 +178,7 @@ export function createServer(config: memory.MemoryConfig): McpServer {
         `📅 Last daily note: ${s.lastDailyNote ?? "none"}`,
       ].join("\n");
       return { content: [{ type: "text" as const, text }] };
-    }
+    })
   );
 
   return server;
