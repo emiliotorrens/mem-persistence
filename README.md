@@ -112,11 +112,16 @@ There are two ways to run mem-persistence:
 | Mode | How it works | Embeddings config |
 |---|---|---|
 | **stdio** (local) | Claude Desktop spawns the process locally on the same machine | Set env vars in the MCP config on that machine |
-| **HTTP** (remote) | Server runs once on a central machine; any client connects via URL | Configure once on the server — all clients benefit automatically |
+| **HTTP** (recommended) | Server runs once as a background service; any client connects via URL | Configure once on the server — all clients benefit automatically |
 
-**With HTTP mode, you configure embeddings once and all clients get semantic search for free.** Your laptop doesn't need an API key — it just sends a query to the server and gets back results. The server handles all the Gemini calls and caching.
+**HTTP mode is the recommended setup** for most users, even on a single machine:
 
-This is the recommended setup when you have a always-on machine (desktop, home server, etc.) and want to use the same memory from multiple devices.
+- **One process** shared by all clients instead of a new process per Claude Desktop window
+- **No API keys in client configs** — embeddings are configured once on the server
+- **Multi-device ready** — add a second machine (laptop, etc.) with just a URL, no extra setup
+- **Easier to manage** — restart, update, or monitor with pm2 in one place
+
+Use stdio only if you can't run a background service (e.g., restricted environments, quick local testing).
 
 ### Remote access via HTTP (Tailscale / VPN)
 
