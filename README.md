@@ -144,9 +144,23 @@ mcp: {
 
 ## Configuration
 
-### Embeddings (optional)
+### Embeddings (optional — but recommended)
 
-Enable semantic search with embedding providers via environment variables:
+By default, mem-persistence searches using **token matching** only (Jaccard + containment + entity overlap). This works well for keyword-based queries and requires no API keys or internet connection.
+
+Enabling embeddings adds **semantic understanding** on top of token matching:
+
+| | Token-only (default) | With embeddings |
+|---|---|---|
+| Query: `"mem-persistence GitHub"` | ✅ 0.62 — finds exact keyword matches | ✅ 0.77 — higher confidence |
+| Query: `"where does Emilio work"` | ❌ misses (no keyword overlap with "CIO de Dingus") | ✅ 0.57 — understands meaning |
+| Query: `"presión arterial"` | ✅ 0.60 — finds keyword matches | ✅ 0.62 — also finds related health entries |
+| API calls | None | Only for new content (cached after first call) |
+| Works offline | ✅ | ❌ (first time), ✅ (after cache) |
+
+**TL;DR**: Token-only is fine for most use cases. Enable embeddings if you want natural language queries like *"what trips do I have coming up?"* instead of *"viajes 2026"*.
+
+Enable via environment variables:
 
 ```bash
 # Gemini (free, recommended)
