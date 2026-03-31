@@ -27,6 +27,8 @@ mem-persistence fixes this:
 | `memory_entities(query?)` | Query the knowledge graph (if `entities.md` exists) |
 | `memory_status()` | Index stats: files, chunks, last sync |
 
+---
+
 ## Installation
 
 ```bash
@@ -37,6 +39,8 @@ npm install
 npm run build
 ```
 
+---
+
 ## Quick Start
 
 **1. Start the server**
@@ -45,24 +49,7 @@ npm run build
 node dist/index.js --workspace /path/to/your/workspace --port 3456
 ```
 
-The `--workspace` path is the directory where your memory files live — your `MEMORY.md`, `memory/`, `reference/` folders, etc. This is the root that mem-persistence will index and search.
-
-**Works with any directory containing `.md` files.** No specific structure required. That said, search quality improves with a layered layout:
-
-| Layer | Path | Purpose |
-|---|---|---|
-| L1 | `MEMORY.md` | Long-term summary — highest search priority |
-| L2 | `memory/*.md` | Daily notes, recent context |
-| L3 | `reference/*.md` | Detailed data, historical records |
-
-If you want an opinionated setup with this structure plus automated crons and deduplication, see [layered-memstack](https://github.com/emiliotorrens/layered-memstack).
-
-Examples:
-- OpenClaw users: `~/.openclaw/workspace` (already structured)
-- Custom setup: any directory with `.md` files you want the agent to remember
-
-**2. Add to Claude Desktop config**
-
+**2. Point your client to it** — add to Claude Desktop config:
 - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
 - Windows: `%APPDATA%\Claude\claude_desktop_config.json`
 
@@ -76,9 +63,9 @@ Examples:
 }
 ```
 
-**3. Add agent instructions**
+**3. Add agent instructions** so the agent uses memory proactively:
 
-Copy [`AGENT_INSTRUCTIONS.md`](AGENT_INSTRUCTIONS.md) into your editor's instructions file so the agent uses memory proactively:
+Copy [`AGENT_INSTRUCTIONS.md`](AGENT_INSTRUCTIONS.md) into:
 
 | Editor | Where to paste |
 |---|---|
@@ -87,7 +74,29 @@ Copy [`AGENT_INSTRUCTIONS.md`](AGENT_INSTRUCTIONS.md) into your editor's instruc
 | Cursor | `.cursorrules` in project root |
 | Windsurf | `.windsurfrules` in project root |
 
-That's it. The agent will now search memory before answering and write important facts automatically.
+Done. The agent will now search memory before answering and write important facts automatically.
+
+---
+
+## Workspace
+
+The `--workspace` flag points to the directory where your memory files live. mem-persistence indexes all `.md` files it finds there recursively.
+
+**Works with any directory containing `.md` files.** No specific structure required. That said, search quality improves with a layered layout:
+
+| Layer | Path | Purpose |
+|---|---|---|
+| L1 | `MEMORY.md` | Long-term curated memory — highest search priority |
+| L2 | `memory/*.md` | Daily notes, recent context |
+| L3 | `reference/*.md` | Detailed data, historical records |
+
+If you want this structure set up automatically (with crons, dedup, and knowledge graph), see [layered-memstack](https://github.com/emiliotorrens/layered-memstack).
+
+You can also set the workspace via environment variable instead of the flag:
+
+```bash
+MEM_PERSISTENCE_WORKSPACE=/path/to/your/workspace
+```
 
 ---
 
@@ -95,23 +104,23 @@ That's it. The agent will now search memory before answering and write important
 
 ### HTTP mode (recommended)
 
-Run the server once as a persistent background service. All clients connect to it via URL — no API keys needed in client configs, no new process per window.
+Run the server **once** as a persistent background service. All clients — local and remote — connect via URL. No API keys in client configs, no new process per window.
 
 ```bash
-# Install pm2 for process management
+# 1. Install pm2
 npm install -g pm2
 
-# Copy and edit the example config
+# 2. Copy and edit the config template
 cp ecosystem.config.cjs.example ecosystem.config.cjs
-# Edit ecosystem.config.cjs: set workspace path and optional API keys
+# → Set your workspace path and optional API keys (see Embeddings section)
 
-# Start
+# 3. Start and persist
 pm2 start ecosystem.config.cjs
-pm2 save      # persist across reboots
-pm2 startup   # enable autostart on system boot
+pm2 save       # save process list
+pm2 startup    # autostart on system reboot (follow the printed instructions)
 ```
 
-Client config (same for all clients — local or remote):
+All clients use the same URL:
 
 ```json
 {
@@ -127,7 +136,7 @@ Health check: `curl http://127.0.0.1:3456/health`
 
 ### stdio mode
 
-Claude Desktop spawns a new process on demand. Simpler to set up, but no process sharing and API keys must be in each client config.
+Claude Desktop spawns the server on demand. Easier to start with, but requires API keys in every client config and spawns a new process per window.
 
 ```json
 {
@@ -147,21 +156,15 @@ Claude Desktop spawns a new process on demand. Simpler to set up, but no process
 }
 ```
 
-> **WSL users:** replace `"command": "node"` with `"command": "wsl"` and add `"node"` as the first arg.
+> **WSL users (Windows):** replace `"command": "node"` with `"command": "wsl"` and add `"node"` as the first element of `args`.
 
 ### Remote access via Tailscale
 
-Access memory from multiple machines (laptop, home server, etc.) using Tailscale or any private VPN.
+Access the same memory from a laptop, tablet, or any other machine using Tailscale or a private VPN.
 
-> ⚠️ **Never expose the port to the public internet.** mem-persistence has no authentication. Use Tailscale or a VPN.
+> ⚠️ **Security:** mem-persistence has no built-in authentication. **Never expose the port to the public internet.** Always use Tailscale, a VPN, or a firewall rule to restrict access.
 
-On the host machine, start the server bound to all interfaces:
-
-```bash
-pm2 start ecosystem.config.cjs  # with --host 0.0.0.0 in ecosystem.config.cjs
-```
-
-On remote clients, use the Tailscale hostname:
+In `ecosystem.config.cjs`, change `--host 127.0.0.1` to `--host 0.0.0.0` to listen on all interfaces. Then on the remote machine:
 
 ```json
 {
@@ -173,43 +176,43 @@ On remote clients, use the Tailscale hostname:
 }
 ```
 
-No API keys, no paths, no wsl. Just the URL.
+No API keys, no paths, no wsl. Just the URL. Embeddings are handled by the server.
 
 ---
 
 ## Embeddings (optional — but recommended)
 
-By default, search uses **token matching only** (Jaccard + containment + entity overlap). No API calls, works offline.
+By default, search uses **token matching only** (Jaccard + containment + entity overlap). No API calls, works offline, good for keyword queries.
 
-Enabling embeddings adds **semantic understanding**:
+Enabling embeddings adds **semantic understanding** on top:
 
-| | Token-only | With embeddings |
+| Query | Token-only | With embeddings |
 |---|---|---|
-| `"mem-persistence GitHub"` | ✅ finds keyword matches | ✅ higher confidence |
+| `"mem-persistence GitHub"` | ✅ keyword match | ✅ higher confidence |
 | `"where does Emilio work"` | ❌ no keyword overlap | ✅ understands meaning |
 | `"what trips are coming up?"` | ❌ misses if phrased differently | ✅ matches semantically |
-| API calls | None | Only for new content (cached after first call) |
-| Offline | ✅ always | ✅ after first run |
+| API calls needed | Never | Only for new content (cached after first call) |
+| Works offline | ✅ always | ✅ after first run |
 
-**Get a free Gemini API key** at [aistudio.google.com](https://aistudio.google.com) → Get API key.
+**Get a free Gemini API key** → [aistudio.google.com](https://aistudio.google.com) → Get API key.
 
-Configure via `ecosystem.config.cjs` (HTTP mode) or env vars (stdio mode):
+Set in `ecosystem.config.cjs` (HTTP mode) or as env vars (stdio mode):
 
 ```bash
-MEM_PERSISTENCE_EMBEDDINGS=gemini    # or "openai"
-GOOGLE_API_KEY=your-key              # for Gemini (free)
-OPENAI_API_KEY=your-key              # for OpenAI ($0.02/M tokens)
+MEM_PERSISTENCE_EMBEDDINGS=gemini    # "gemini" or "openai"
+GOOGLE_API_KEY=your-key              # Gemini — free
+OPENAI_API_KEY=your-key              # OpenAI — $0.02/M tokens
 ```
 
-How it works:
-- **Hybrid scoring**: 0.4 × token score + 0.6 × vector score
-- **Disk cache**: embeddings stored in `.mem-persistence/embeddings/` — no repeated API calls
+Details:
+- **Hybrid scoring**: 0.4 × token + 0.6 × vector
+- **Disk cache**: stored in `.mem-persistence/embeddings/` — no repeated API calls for the same content
 - **Default model**: `gemini-embedding-001` (free, 1500 req/min)
-- **Fallback**: if the API fails, falls back silently to token-only search
+- **Silent fallback**: if the API is unavailable, falls back to token-only automatically
 
 ---
 
-## How Dedup Works
+## Deduplication
 
 Before writing, mem-persistence checks if similar content already exists:
 
@@ -219,9 +222,9 @@ Match:  "gh auth login hecho — cuenta emiliotorrens, protocolo HTTPS"
 Result: DUPLICATE (score: 0.90) — not written
 ```
 
-Uses token similarity (Jaccard + containment) and entity overlap (IDs, dates, versions).
+Uses token similarity (Jaccard + containment) and entity overlap (IDs, dates, versions, URLs).
 
-Tune the threshold: `MEM_PERSISTENCE_DEDUP_THRESHOLD=0.65` (default).
+Adjust the threshold: `MEM_PERSISTENCE_DEDUP_THRESHOLD=0.65` (default — lower = stricter).
 
 ---
 
@@ -236,6 +239,8 @@ Tune the threshold: `MEM_PERSISTENCE_DEDUP_THRESHOLD=0.65` (default).
 - [ ] CLI (`mem-persistence search "query"`)
 - [ ] Local embeddings via transformers.js (offline, no API key)
 - [ ] npm publish
+
+---
 
 ## Related
 
