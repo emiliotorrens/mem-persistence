@@ -11,7 +11,8 @@ AI agents have amnesia. Each tool keeps its own silo — Claude Code forgets wha
 mem-persistence fixes this:
 
 - **Markdown is the source of truth** — not a database, not a binary blob. Files you can read, edit, and version with git.
-- **Hybrid search** — BM25 keywords + semantic embeddings for accurate recall.
+- **Hybrid search** — token matching + semantic embeddings for accurate recall.
+- **Embedding providers** — Gemini (free), OpenAI, or none (token-only). Cached to disk.
 - **Deduplication** — token-based + entity overlap detection prevents writing the same fact twice.
 - **Temporal decay** — recent notes rank higher, old notes fade (configurable half-life).
 - **MMR diversity** — no redundant results cluttering your context window.
@@ -143,28 +144,53 @@ mcp: {
 
 ## Configuration
 
-```json5
-// Pass via CLI flags or config file
+### Embeddings (optional)
+
+Enable semantic search with embedding providers via environment variables:
+
+```bash
+# Gemini (free, recommended)
+MEM_PERSISTENCE_EMBEDDINGS=gemini
+GOOGLE_API_KEY=your-google-api-key
+
+# OpenAI (paid, $0.02/M tokens)
+MEM_PERSISTENCE_EMBEDDINGS=openai
+OPENAI_API_KEY=your-openai-api-key
+```
+
+Add to your MCP config:
+
+```json
 {
-  "workspace": "~/my-workspace",       // where your .md files live
-  "search": {
-    "hybrid": true,                     // BM25 + vector (default: true)
-    "temporalDecay": {
-      "enabled": true,
-      "halfLifeDays": 30               // score halves every 30 days
-    },
-    "mmr": {
-      "enabled": true,
-      "lambda": 0.7                    // 0 = max diversity, 1 = max relevance
+  "mcpServers": {
+    "memory": {
+      "command": "node",
+      "args": ["/path/to/mem-persistence/dist/index.js", "--workspace", "/path/to/workspace"],
+      "env": {
+        "MEM_PERSISTENCE_EMBEDDINGS": "gemini",
+        "GOOGLE_API_KEY": "your-key"
+      }
     }
-  },
-  "dedup": {
-    "threshold": 0.65                  // similarity threshold for dedup
-  },
-  "embeddings": {
-    "provider": "none"                 // "none", "gemini", "openai", "local"
   }
 }
+```
+
+Without `MEM_PERSISTENCE_EMBEDDINGS`, search uses token matching only (no API calls, works offline).
+
+With embeddings enabled:
+- **Hybrid scoring**: 0.4 × token score + 0.6 × vector score
+- **Disk cache**: embeddings cached in `.mem-persistence/embeddings/` — subsequent searches don't re-call the API
+- **Default model**: `gemini-embedding-001` (free, 1500 req/min)
+- **Fallback**: if the API fails, falls back to token-only search
+
+### Other options
+
+```bash
+# Dedup threshold (default: 0.65)
+MEM_PERSISTENCE_DEDUP_THRESHOLD=0.65
+
+# Custom embedding model
+MEM_PERSISTENCE_EMBEDDINGS_MODEL=text-embedding-3-large
 ```
 
 ## How Dedup Works
@@ -182,10 +208,12 @@ Uses token similarity (Jaccard + containment), entity overlap (IDs, dates, versi
 ## Roadmap
 
 - [x] Deduplication engine
-- [x] Hybrid search design (BM25 + vector + MMR + decay)
+- [x] Hybrid search (token + vector + MMR + temporal decay)
 - [x] MCP server (stdio transport) — 6 tools, TypeScript + ESM
+- [x] Embedding providers (Gemini free, OpenAI) with disk cache
+- [x] Request/response logging (.mem-persistence/logs/)
 - [ ] CLI (`mem-persistence search "query"`)
-- [ ] Embedding providers (Gemini, OpenAI, local via transformers.js)
+- [ ] Local embeddings via transformers.js
 - [ ] npm publish
 
 ## Related
