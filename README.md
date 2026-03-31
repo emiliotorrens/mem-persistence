@@ -117,12 +117,12 @@ Add to `.cursor/mcp.json` in your project:
 
 ### Agent Instructions
 
-MCP tools are available but agents won't use them proactively without instructions. Copy from [`AGENT_INSTRUCTIONS.md`](AGENT_INSTRUCTIONS.md) into:
+MCP tools are available but agents won't use them proactively without instructions. Copy the contents of [`AGENT_INSTRUCTIONS.md`](AGENT_INSTRUCTIONS.md) into the right place for your editor:
 
-- **Claude Desktop** → Project Knowledge / Custom Instructions
+- **Claude Desktop** → Settings (⚙️) → "Personal Preferences" → paste in the text box → Save
 - **Claude Code** → `CLAUDE.md` in your project root
-- **Cursor** → `.cursorrules`
-- **Windsurf** → `.windsurfrules`
+- **Cursor** → `.cursorrules` in your project root
+- **Windsurf** → `.windsurfrules` in your project root
 
 This tells the agent to search memory before answering, write important facts, and checkpoint at end of sessions.
 
