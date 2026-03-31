@@ -4,3 +4,4 @@ node_modules/
 .mem-persistence/
 
 dist/
+ecosystem.config.cjs
