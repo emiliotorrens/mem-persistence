@@ -105,6 +105,19 @@ Add to `.cursor/mcp.json` in your project:
 }
 ```
 
+### Deployment modes and embeddings
+
+There are two ways to run mem-persistence:
+
+| Mode | How it works | Embeddings config |
+|---|---|---|
+| **stdio** (local) | Claude Desktop spawns the process locally on the same machine | Set env vars in the MCP config on that machine |
+| **HTTP** (remote) | Server runs once on a central machine; any client connects via URL | Configure once on the server — all clients benefit automatically |
+
+**With HTTP mode, you configure embeddings once and all clients get semantic search for free.** Your laptop doesn't need an API key — it just sends a query to the server and gets back results. The server handles all the Gemini calls and caching.
+
+This is the recommended setup when you have a always-on machine (desktop, home server, etc.) and want to use the same memory from multiple devices.
+
 ### Remote access via HTTP (Tailscale / VPN)
 
 Need to access memory from a laptop or a second machine? Run the server in HTTP mode on the host machine and connect remotely using **Tailscale or a private VPN**.
