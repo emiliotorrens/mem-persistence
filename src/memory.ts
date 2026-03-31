@@ -7,6 +7,7 @@
 import { readdir, readFile, writeFile, stat, mkdir, rename } from "fs/promises";
 import { join, relative, extname, basename } from "path";
 import { existsSync } from "fs";
+import { EmbeddingService, type EmbeddingConfig } from "./embeddings.js";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -18,6 +19,7 @@ export interface MemoryConfig {
   entitiesFile: string; // default: "reference/entities.md"
   archiveDir: string; // default: "memory/archive"
   dedupThreshold: number; // default: 0.65
+  embeddings: EmbeddingConfig; // default: { provider: "none" }
 }
 
 export interface SearchResult {
@@ -56,6 +58,7 @@ export function defaultConfig(workspace: string): MemoryConfig {
     entitiesFile: "reference/entities.md",
     archiveDir: "memory/archive",
     dedupThreshold: 0.65,
+    embeddings: { provider: "none" },
   };
 }
 
@@ -222,8 +225,19 @@ export async function search(
 
   const queryTokens = tokenize(query);
   const queryEntities = extractEntities(query);
-  const results: SearchResult[] = [];
   const now = Date.now();
+
+  // Collect all candidate lines
+  interface Candidate {
+    path: string;
+    relativePath: string;
+    line: number;
+    text: string;
+    layer: "L1" | "L2" | "L3";
+    tokenScore: number;
+  }
+
+  const candidates: Candidate[] = [];
 
   for (const filePath of allFiles) {
     const layer = getLayer(filePath, config);
@@ -246,38 +260,101 @@ export async function search(
       const line = lines[i];
       if (!line.trim() || /^#{1,6}\s/.test(line)) continue;
 
+      // Skip JSON metadata, very short lines, and code block markers
+      const trimmed = line.trim();
+      if (trimmed.startsWith('```') || trimmed.startsWith('{') || trimmed.startsWith('}')) continue;
+      if (/^"[^"]+"\s*:\s*"[^"]*",?$/.test(trimmed)) continue; // JSON key-value
+      if (/^[\[\]{}],?$/.test(trimmed)) continue; // JSON brackets
+
       const lineTokens = tokenize(line);
-      if (lineTokens.length < 2) continue;
+      if (lineTokens.length < 3) continue; // Require at least 3 meaningful tokens
 
       const jaccard = jaccardSimilarity(queryTokens, lineTokens);
       const containment = containsSimilarity(queryTokens, lineTokens);
       const lineEntities = extractEntities(line);
       const entOvl = entityOverlap(queryEntities, lineEntities);
 
-      let score =
+      let tokenScore =
         queryEntities.size > 0
           ? jaccard * 0.3 + containment * 0.4 + entOvl * 0.3
           : jaccard * 0.4 + containment * 0.6;
 
-      score *= temporalMultiplier;
+      tokenScore *= temporalMultiplier;
 
       // Boost L1 slightly
-      if (layer === "L1") score *= 1.1;
+      if (layer === "L1") tokenScore *= 1.1;
 
-      if (score > 0.15) {
-        results.push({
+      if (tokenScore > 0.05) {  // Lower threshold when embeddings enabled; filtered later
+        candidates.push({
           path: filePath,
           relativePath: rel,
           line: i + 1,
           text: line.trim(),
-          score: Math.round(score * 1000) / 1000,
           layer,
+          tokenScore,
         });
       }
     }
   }
 
-  // Sort by score desc, take top N
+  // If embeddings are enabled, compute hybrid scores
+  const embeddingService = new EmbeddingService(config.embeddings, config.workspace);
+
+  if (embeddingService.enabled && candidates.length > 0) {
+    // Get top candidates by token score for embedding (limit to save API calls)
+    const topK = Math.min(candidates.length, maxResults * 3);
+    candidates.sort((a, b) => b.tokenScore - a.tokenScore);
+    const topCandidates = candidates.slice(0, topK);
+
+    const vectorScores = await embeddingService.similarity(
+      query,
+      topCandidates.map((c) => c.text)
+    );
+
+    if (vectorScores) {
+      // Hybrid score: 0.4 token + 0.6 vector
+      // But require minimum token relevance to avoid pure name matches
+      const results: SearchResult[] = topCandidates
+        .map((c, i) => ({
+          path: c.path,
+          relativePath: c.relativePath,
+          line: c.line,
+          text: c.text,
+          score: Math.round((c.tokenScore * 0.4 + vectorScores[i] * 0.6) * 1000) / 1000,
+          layer: c.layer,
+        }))
+        .filter((r) => r.score > 0.25);
+
+      results.sort((a, b) => b.score - a.score);
+
+      // MMR-style diversity: penalize results from same file+nearby lines
+      const diverse: SearchResult[] = [];
+      for (const r of results) {
+        const isDuplicate = diverse.some(
+          (d) =>
+            d.relativePath === r.relativePath &&
+            Math.abs(d.line - r.line) < 5
+        );
+        if (!isDuplicate) diverse.push(r);
+        if (diverse.length >= maxResults) break;
+      }
+
+      return diverse;
+    }
+  }
+
+  // Fallback: token-only scoring
+  const results: SearchResult[] = candidates
+    .filter((c) => c.tokenScore > 0.15)
+    .map((c) => ({
+      path: c.path,
+      relativePath: c.relativePath,
+      line: c.line,
+      text: c.text,
+      score: Math.round(c.tokenScore * 1000) / 1000,
+      layer: c.layer,
+    }));
+
   results.sort((a, b) => b.score - a.score);
   return results.slice(0, maxResults);
 }

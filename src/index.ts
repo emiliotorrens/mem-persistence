@@ -31,6 +31,20 @@ async function main() {
     );
   }
 
+  // Embedding config from env vars
+  const embProvider = process.env.MEM_PERSISTENCE_EMBEDDINGS || "none";
+  if (embProvider === "gemini" || embProvider === "openai") {
+    config.embeddings = {
+      provider: embProvider,
+      apiKey:
+        process.env.MEM_PERSISTENCE_EMBEDDINGS_API_KEY ||
+        (embProvider === "gemini"
+          ? process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY
+          : process.env.OPENAI_API_KEY),
+      model: process.env.MEM_PERSISTENCE_EMBEDDINGS_MODEL,
+    };
+  }
+
   const server = createServer(config);
   const transport = new StdioServerTransport();
   await server.connect(transport);
