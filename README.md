@@ -2,7 +2,7 @@
 
 > 🧠 Persistent memory MCP server for AI agents — one memory, every agent, your files.
 
-mem-persistence lets Claude Code, OpenClaw, Cursor, Zed, and any MCP-compatible client share the same persistent memory, backed by plain Markdown files you own and can edit by hand.
+mem-persistence lets Claude Desktop, Claude Code, Cursor, Zed, and any MCP-compatible client share the same persistent memory, backed by plain Markdown files you own and can edit by hand.
 
 ## Why?
 
@@ -13,31 +13,16 @@ mem-persistence fixes this:
 - **Markdown is the source of truth** — not a database, not a binary blob. Files you can read, edit, and version with git.
 - **Hybrid search** — token matching + semantic embeddings for accurate recall.
 - **Embedding providers** — Gemini (free), OpenAI, or none (token-only). Cached to disk.
-- **Deduplication** — token-based + entity overlap detection prevents writing the same fact twice.
-- **Temporal decay** — recent notes rank higher, old notes fade (configurable half-life).
-- **MMR diversity** — no redundant results cluttering your context window.
+- **Deduplication** — prevents writing the same fact twice (token + entity overlap detection).
 - **Works offline** — no cloud dependency. Embeddings are optional.
-
-## Architecture
-
-```
-Claude Code ──── MCP (stdio) ────┐
-Cursor/Zed ──── MCP (stdio) ────┤──→ mem-persistence ──→ Markdown files
-OpenClaw ────── MCP (stdio) ────┘     (local process)    (your workspace)
-
-Claude (laptop) ─ MCP (HTTP) ──→ mem-persistence ──→ same Markdown files
-                                   (remote, via Tailscale)
-```
-
-The server reads and writes to a workspace directory containing Markdown files. It doesn't care how those files are organized — but it works best with a layered structure (see [layered-memstack](https://github.com/emiliotorrens/layered-memstack) for an opinionated OpenClaw skill that sets this up).
 
 ## MCP Tools
 
 | Tool | Description |
 |---|---|
-| `memory_search(query, maxResults?)` | Hybrid search across all indexed .md files |
+| `memory_search(query, maxResults?)` | Hybrid search across all `.md` files |
 | `memory_write(content, file?, section?)` | Write with automatic deduplication |
-| `memory_read(path, from?, lines?)` | Read specific file or section |
+| `memory_read(path, from?, lines?)` | Read a specific file or section |
 | `memory_checkpoint(summary)` | Save a session checkpoint to a daily note |
 | `memory_entities(query?)` | Query the knowledge graph (if `entities.md` exists) |
 | `memory_status()` | Index stats: files, chunks, last sync |
@@ -45,35 +30,25 @@ The server reads and writes to a workspace directory containing Markdown files. 
 ## Installation
 
 ```bash
-# From source (until npm publish)
+# From source (npm publish coming soon)
 git clone https://github.com/emiliotorrens/mem-persistence.git
 cd mem-persistence
 npm install
 npm run build
 ```
 
-### Claude Desktop
+## Quick Start
 
-**Option A — HTTP mode (recommended)**
-
-Start the server once as a background service, then point Claude Desktop to it:
+**1. Start the server**
 
 ```bash
-# 1. Start the server (with pm2 for persistence across restarts)
-npm install -g pm2
-pm2 start dist/index.js --name mem-persistence -- \
-  --workspace /path/to/workspace \
-  --port 3456 \
-  --host 127.0.0.1   # use 0.0.0.0 for Tailscale/remote access
-pm2 save
-
-# Optional: enable embeddings (Gemini is free)
-# Pass via ecosystem.config.cjs — see ecosystem.config.cjs.example
+node dist/index.js --workspace /path/to/your/workspace --port 3456
 ```
 
-Then add to your Claude Desktop config:
-- **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
-- **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
+**2. Add to Claude Desktop config**
+
+- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
 
 ```json
 {
@@ -85,11 +60,58 @@ Then add to your Claude Desktop config:
 }
 ```
 
-No API keys in the client config. Embeddings are handled by the server.
+**3. Add agent instructions**
 
-**Option B — stdio mode**
+Copy [`AGENT_INSTRUCTIONS.md`](AGENT_INSTRUCTIONS.md) into your editor's instructions file so the agent uses memory proactively:
 
-Claude Desktop spawns the process on demand. Simpler to set up, but a new process per window and you must include API keys in the client config.
+| Editor | Where to paste |
+|---|---|
+| Claude Desktop | Settings → Personal Preferences |
+| Claude Code | `CLAUDE.md` in project root |
+| Cursor | `.cursorrules` in project root |
+| Windsurf | `.windsurfrules` in project root |
+
+That's it. The agent will now search memory before answering and write important facts automatically.
+
+---
+
+## Deployment
+
+### HTTP mode (recommended)
+
+Run the server once as a persistent background service. All clients connect to it via URL — no API keys needed in client configs, no new process per window.
+
+```bash
+# Install pm2 for process management
+npm install -g pm2
+
+# Copy and edit the example config
+cp ecosystem.config.cjs.example ecosystem.config.cjs
+# Edit ecosystem.config.cjs: set workspace path and optional API keys
+
+# Start
+pm2 start ecosystem.config.cjs
+pm2 save      # persist across reboots
+pm2 startup   # enable autostart on system boot
+```
+
+Client config (same for all clients — local or remote):
+
+```json
+{
+  "mcpServers": {
+    "memory": {
+      "url": "http://127.0.0.1:3456/mem-persistence/mcp"
+    }
+  }
+}
+```
+
+Health check: `curl http://127.0.0.1:3456/health`
+
+### stdio mode
+
+Claude Desktop spawns a new process on demand. Simpler to set up, but no process sharing and API keys must be in each client config.
 
 ```json
 {
@@ -98,8 +120,7 @@ Claude Desktop spawns the process on demand. Simpler to set up, but a new proces
       "command": "node",
       "args": [
         "/path/to/mem-persistence/dist/index.js",
-        "--workspace",
-        "/path/to/your/workspace"
+        "--workspace", "/path/to/your/workspace"
       ],
       "env": {
         "MEM_PERSISTENCE_EMBEDDINGS": "gemini",
@@ -110,197 +131,67 @@ Claude Desktop spawns the process on demand. Simpler to set up, but a new proces
 }
 ```
 
-> **WSL users:** Use `"command": "wsl"` and prepend `"node"` to args.
+> **WSL users:** replace `"command": "node"` with `"command": "wsl"` and add `"node"` as the first arg.
 
-### Claude Code
+### Remote access via Tailscale
 
-Add to `~/.claude.json` or project `.claude/settings.json`:
+Access memory from multiple machines (laptop, home server, etc.) using Tailscale or any private VPN.
+
+> ⚠️ **Never expose the port to the public internet.** mem-persistence has no authentication. Use Tailscale or a VPN.
+
+On the host machine, start the server bound to all interfaces:
+
+```bash
+pm2 start ecosystem.config.cjs  # with --host 0.0.0.0 in ecosystem.config.cjs
+```
+
+On remote clients, use the Tailscale hostname:
 
 ```json
 {
   "mcpServers": {
     "memory": {
-      "command": "node",
-      "args": ["/path/to/mem-persistence/dist/index.js", "--workspace", "/path/to/workspace"]
+      "url": "http://my-machine.tail1234.ts.net:3456/mem-persistence/mcp"
     }
   }
 }
 ```
 
-### Cursor
+No API keys, no paths, no wsl. Just the URL.
 
-Add to `.cursor/mcp.json` in your project:
+---
 
-```json
-{
-  "mcpServers": {
-    "memory": {
-      "command": "node",
-      "args": ["/path/to/mem-persistence/dist/index.js", "--workspace", "/path/to/workspace"]
-    }
-  }
-}
-```
+## Embeddings (optional — but recommended)
 
-### Deployment modes and embeddings
+By default, search uses **token matching only** (Jaccard + containment + entity overlap). No API calls, works offline.
 
-There are two ways to run mem-persistence:
+Enabling embeddings adds **semantic understanding**:
 
-| Mode | How it works | Embeddings config |
+| | Token-only | With embeddings |
 |---|---|---|
-| **stdio** (local) | Claude Desktop spawns the process locally on the same machine | Set env vars in the MCP config on that machine |
-| **HTTP** (recommended) | Server runs once as a background service; any client connects via URL | Configure once on the server — all clients benefit automatically |
-
-**HTTP mode is the recommended setup** for most users, even on a single machine:
-
-- **One process** shared by all clients instead of a new process per Claude Desktop window
-- **No API keys in client configs** — embeddings are configured once on the server
-- **Multi-device ready** — add a second machine (laptop, etc.) with just a URL, no extra setup
-- **Easier to manage** — restart, update, or monitor with pm2 in one place
-
-Use stdio only if you can't run a background service (e.g., restricted environments, quick local testing).
-
-### Remote access via HTTP (Tailscale / VPN)
-
-Need to access memory from a laptop or a second machine? Run the server in HTTP mode on the host machine and connect remotely using **Tailscale or a private VPN**.
-
-> ⚠️ **Security warning:** mem-persistence HTTP mode has no authentication. **Never expose the port to the public internet.** Use Tailscale (zero-config, end-to-end encrypted) or a VPN to keep it private.
-
-**On the host machine (where your workspace lives):**
-
-```bash
-node dist/index.js --workspace /path/to/workspace --port 3456
-```
-
-This starts an HTTP server listening on `127.0.0.1:3456` by default (localhost only). To make it accessible over Tailscale, bind it to `0.0.0.0` or the Tailscale interface:
-
-```bash
-node dist/index.js --workspace /path/to/workspace --port 3456 --host 0.0.0.0
-```
-
-The MCP endpoint will be at: `http://<tailscale-hostname>:3456/mem-persistence/mcp`
-
-**On the remote machine (laptop, etc.) — Claude Desktop config:**
-
-```json
-{
-  "mcpServers": {
-    "memory": {
-      "url": "http://my-machine.tailb5faba.ts.net:3456/mem-persistence/mcp"
-    }
-  }
-}
-```
-
-No `command`, no `wsl`, no local paths needed.
-
-**Health check:**
-
-```bash
-curl http://my-machine.tailb5faba.ts.net:3456/health
-# → {"status":"ok","server":"mem-persistence","workspace":"/path/to/workspace"}
-```
-
-**Run as a background service (optional):**
-
-```bash
-# With pm2
-npm install -g pm2
-pm2 start "node dist/index.js --workspace /path/to/workspace --port 3456 --host 0.0.0.0" --name mem-persistence
-pm2 save && pm2 startup
-
-# Or with systemd (Linux)
-# See docs/systemd.md (coming soon)
-```
-
-MCP tools are available but agents won't use them proactively without instructions. Copy the contents of [`AGENT_INSTRUCTIONS.md`](AGENT_INSTRUCTIONS.md) into the right place for your editor:
-
-- **Claude Desktop** → Settings (⚙️) → "Personal Preferences" → paste in the text box → Save
-- **Claude Code** → `CLAUDE.md` in your project root
-- **Cursor** → `.cursorrules` in your project root
-- **Windsurf** → `.windsurfrules` in your project root
-
-This tells the agent to search memory before answering, write important facts, and checkpoint at end of sessions.
-
-### OpenClaw
-
-Add to `openclaw.json`:
-
-```json5
-mcp: {
-  servers: {
-    memory: {
-      command: "mem-persistence",
-      args: ["--workspace", "/path/to/workspace"]
-    }
-  }
-}
-```
-
-## Configuration
-
-### Embeddings (optional — but recommended)
-
-By default, mem-persistence searches using **token matching** only (Jaccard + containment + entity overlap). This works well for keyword-based queries and requires no API keys or internet connection.
-
-Enabling embeddings adds **semantic understanding** on top of token matching:
-
-| | Token-only (default) | With embeddings |
-|---|---|---|
-| Query: `"mem-persistence GitHub"` | ✅ 0.62 — finds exact keyword matches | ✅ 0.77 — higher confidence |
-| Query: `"where does Emilio work"` | ❌ misses (no keyword overlap with "CIO de Dingus") | ✅ 0.57 — understands meaning |
-| Query: `"presión arterial"` | ✅ 0.60 — finds keyword matches | ✅ 0.62 — also finds related health entries |
+| `"mem-persistence GitHub"` | ✅ finds keyword matches | ✅ higher confidence |
+| `"where does Emilio work"` | ❌ no keyword overlap | ✅ understands meaning |
+| `"what trips are coming up?"` | ❌ misses if phrased differently | ✅ matches semantically |
 | API calls | None | Only for new content (cached after first call) |
-| Works offline | ✅ | ❌ (first time), ✅ (after cache) |
+| Offline | ✅ always | ✅ after first run |
 
-**TL;DR**: Token-only is fine for most use cases. Enable embeddings if you want natural language queries like *"what trips do I have coming up?"* instead of *"viajes 2026"*.
+**Get a free Gemini API key** at [aistudio.google.com](https://aistudio.google.com) → Get API key.
 
-Enable via environment variables:
+Configure via `ecosystem.config.cjs` (HTTP mode) or env vars (stdio mode):
 
 ```bash
-# Gemini (free, recommended)
-MEM_PERSISTENCE_EMBEDDINGS=gemini
-GOOGLE_API_KEY=your-google-api-key
-
-# OpenAI (paid, $0.02/M tokens)
-MEM_PERSISTENCE_EMBEDDINGS=openai
-OPENAI_API_KEY=your-openai-api-key
+MEM_PERSISTENCE_EMBEDDINGS=gemini    # or "openai"
+GOOGLE_API_KEY=your-key              # for Gemini (free)
+OPENAI_API_KEY=your-key              # for OpenAI ($0.02/M tokens)
 ```
 
-Add to your MCP config:
-
-```json
-{
-  "mcpServers": {
-    "memory": {
-      "command": "node",
-      "args": ["/path/to/mem-persistence/dist/index.js", "--workspace", "/path/to/workspace"],
-      "env": {
-        "MEM_PERSISTENCE_EMBEDDINGS": "gemini",
-        "GOOGLE_API_KEY": "your-key"
-      }
-    }
-  }
-}
-```
-
-Without `MEM_PERSISTENCE_EMBEDDINGS`, search uses token matching only (no API calls, works offline).
-
-With embeddings enabled:
+How it works:
 - **Hybrid scoring**: 0.4 × token score + 0.6 × vector score
-- **Disk cache**: embeddings cached in `.mem-persistence/embeddings/` — subsequent searches don't re-call the API
+- **Disk cache**: embeddings stored in `.mem-persistence/embeddings/` — no repeated API calls
 - **Default model**: `gemini-embedding-001` (free, 1500 req/min)
-- **Fallback**: if the API fails, falls back to token-only search
+- **Fallback**: if the API fails, falls back silently to token-only search
 
-### Other options
-
-```bash
-# Dedup threshold (default: 0.65)
-MEM_PERSISTENCE_DEDUP_THRESHOLD=0.65
-
-# Custom embedding model
-MEM_PERSISTENCE_EMBEDDINGS_MODEL=text-embedding-3-large
-```
+---
 
 ## How Dedup Works
 
@@ -312,27 +203,30 @@ Match:  "gh auth login hecho — cuenta emiliotorrens, protocolo HTTPS"
 Result: DUPLICATE (score: 0.90) — not written
 ```
 
-Uses token similarity (Jaccard + containment), entity overlap (IDs, dates, versions), and segment comparison for dense multi-fact lines.
+Uses token similarity (Jaccard + containment) and entity overlap (IDs, dates, versions).
+
+Tune the threshold: `MEM_PERSISTENCE_DEDUP_THRESHOLD=0.65` (default).
+
+---
 
 ## Roadmap
 
 - [x] Deduplication engine
 - [x] Hybrid search (token + vector + MMR + temporal decay)
-- [x] MCP server (stdio transport) — 6 tools, TypeScript + ESM
-- [x] Embedding providers (Gemini free, OpenAI) with disk cache
-- [x] Request/response logging (.mem-persistence/logs/)
-- [x] HTTP transport for remote access (--port, Tailscale-friendly)
+- [x] MCP server — stdio and HTTP transports, 6 tools, TypeScript + ESM
+- [x] Embedding providers: Gemini (free) and OpenAI, with disk cache
+- [x] Request/response logging (`.mem-persistence/logs/`)
+- [x] HTTP mode — Tailscale-friendly, pm2-ready
 - [ ] CLI (`mem-persistence search "query"`)
-- [ ] Local embeddings via transformers.js
+- [ ] Local embeddings via transformers.js (offline, no API key)
 - [ ] npm publish
 
 ## Related
 
-- **[layered-memstack](https://github.com/emiliotorrens/layered-memstack)** — OpenClaw skill that sets up a complete 3-layer memory system with automated crons, dedup, knowledge graph, and weekly audits. Uses mem-persistence as the MCP bridge.
+- **[layered-memstack](https://github.com/emiliotorrens/layered-memstack)** — OpenClaw skill that sets up a 3-layer memory system with automated crons, dedup, and knowledge graph. Uses mem-persistence as the MCP bridge.
 
-## Inspiration & Credits
+## Credits
 
-- **[Signet AI](https://github.com/Signet-AI/signetai)** — inspiration for markdown-first agent memory
 - **[OpenClaw](https://github.com/openclaw/openclaw)** — the agent framework where this was born and battle-tested
 - **[MCP](https://modelcontextprotocol.io)** — the protocol that makes cross-agent memory possible
 
