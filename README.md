@@ -42,40 +42,85 @@ The server reads and writes to a workspace directory containing Markdown files. 
 ## Installation
 
 ```bash
-# npm (recommended)
-npm install -g mem-persistence
-
-# From source
+# From source (until npm publish)
 git clone https://github.com/emiliotorrens/mem-persistence.git
-cd mem-persistence && npm install && npm run build
+cd mem-persistence
+npm install
+npm run build
 ```
 
 ### Claude Desktop
 
-Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
+Add to your config file:
+- **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
+
+```json
+{
+  "mcpServers": {
+    "memory": {
+      "command": "node",
+      "args": [
+        "/path/to/mem-persistence/dist/index.js",
+        "--workspace",
+        "/path/to/your/workspace"
+      ]
+    }
+  }
+}
+```
+
+> **WSL users:** Use `"command": "wsl"` and prepend `"node"` to args.
+
+### Claude Code
+
+Add to `~/.claude.json` or project `.claude/settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "memory": {
+      "command": "node",
+      "args": ["/path/to/mem-persistence/dist/index.js", "--workspace", "/path/to/workspace"]
+    }
+  }
+}
+```
+
+### Cursor
+
+Add to `.cursor/mcp.json` in your project:
+
+```json
+{
+  "mcpServers": {
+    "memory": {
+      "command": "node",
+      "args": ["/path/to/mem-persistence/dist/index.js", "--workspace", "/path/to/workspace"]
+    }
+  }
+}
+```
+
+### After npm publish (coming soon)
 
 ```json
 {
   "mcpServers": {
     "memory": {
       "command": "npx",
-      "args": ["tsx", "/path/to/mem-persistence/src/index.ts", "--workspace", "/path/to/workspace"]
+      "args": ["-y", "mem-persistence@latest", "--workspace", "/path/to/workspace"]
     }
   }
 }
 ```
 
-> **WSL users:** Use `"command": "wsl"` and prepend `"npx", "tsx", ...` to args.
-
-### Claude Code / Cursor
-
-Same config in `~/.claude/claude_desktop_config.json` or `.cursor/mcp.json`.
-
 ### Agent Instructions
 
-The MCP tools are available but agents won't use them proactively without instructions. Copy from [`AGENT_INSTRUCTIONS.md`](AGENT_INSTRUCTIONS.md) into your agent's instruction file:
+MCP tools are available but agents won't use them proactively without instructions. Copy from [`AGENT_INSTRUCTIONS.md`](AGENT_INSTRUCTIONS.md) into:
 
-- **Claude Code** → `CLAUDE.md`
+- **Claude Desktop** → Project Knowledge / Custom Instructions
+- **Claude Code** → `CLAUDE.md` in your project root
 - **Cursor** → `.cursorrules`
 - **Windsurf** → `.windsurfrules`
 
