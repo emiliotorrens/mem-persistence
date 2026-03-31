@@ -47,8 +47,18 @@ node dist/index.js --workspace /path/to/your/workspace --port 3456
 
 The `--workspace` path is the directory where your memory files live — your `MEMORY.md`, `memory/`, `reference/` folders, etc. This is the root that mem-persistence will index and search.
 
+**Works with any directory containing `.md` files.** No specific structure required. That said, search quality improves with a layered layout:
+
+| Layer | Path | Purpose |
+|---|---|---|
+| L1 | `MEMORY.md` | Long-term summary — highest search priority |
+| L2 | `memory/*.md` | Daily notes, recent context |
+| L3 | `reference/*.md` | Detailed data, historical records |
+
+If you want an opinionated setup with this structure plus automated crons and deduplication, see [layered-memstack](https://github.com/emiliotorrens/layered-memstack).
+
 Examples:
-- OpenClaw users: `~/.openclaw/workspace`
+- OpenClaw users: `~/.openclaw/workspace` (already structured)
 - Custom setup: any directory with `.md` files you want the agent to remember
 
 **2. Add to Claude Desktop config**
