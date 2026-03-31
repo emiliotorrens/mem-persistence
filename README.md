@@ -24,7 +24,9 @@ mem-persistence fixes this:
 Claude Code ──── MCP (stdio) ────┐
 Cursor/Zed ──── MCP (stdio) ────┤──→ mem-persistence ──→ Markdown files
 OpenClaw ────── MCP (stdio) ────┘     (local process)    (your workspace)
-Any MCP client ─────────────────┘
+
+Claude (laptop) ─ MCP (HTTP) ──→ mem-persistence ──→ same Markdown files
+                                   (remote, via Tailscale)
 ```
 
 The server reads and writes to a workspace directory containing Markdown files. It doesn't care how those files are organized — but it works best with a layered structure (see [layered-memstack](https://github.com/emiliotorrens/layered-memstack) for an opinionated OpenClaw skill that sets this up).
@@ -103,20 +105,58 @@ Add to `.cursor/mcp.json` in your project:
 }
 ```
 
-### After npm publish (coming soon)
+### Remote access via HTTP (Tailscale / VPN)
+
+Need to access memory from a laptop or a second machine? Run the server in HTTP mode on the host machine and connect remotely using **Tailscale or a private VPN**.
+
+> ⚠️ **Security warning:** mem-persistence HTTP mode has no authentication. **Never expose the port to the public internet.** Use Tailscale (zero-config, end-to-end encrypted) or a VPN to keep it private.
+
+**On the host machine (where your workspace lives):**
+
+```bash
+node dist/index.js --workspace /path/to/workspace --port 3456
+```
+
+This starts an HTTP server listening on `127.0.0.1:3456` by default (localhost only). To make it accessible over Tailscale, bind it to `0.0.0.0` or the Tailscale interface:
+
+```bash
+node dist/index.js --workspace /path/to/workspace --port 3456 --host 0.0.0.0
+```
+
+The MCP endpoint will be at: `http://<tailscale-hostname>:3456/mem-persistence/mcp`
+
+**On the remote machine (laptop, etc.) — Claude Desktop config:**
 
 ```json
 {
   "mcpServers": {
     "memory": {
-      "command": "npx",
-      "args": ["-y", "mem-persistence@latest", "--workspace", "/path/to/workspace"]
+      "url": "http://my-machine.tailb5faba.ts.net:3456/mem-persistence/mcp"
     }
   }
 }
 ```
 
-### Agent Instructions
+No `command`, no `wsl`, no local paths needed.
+
+**Health check:**
+
+```bash
+curl http://my-machine.tailb5faba.ts.net:3456/health
+# → {"status":"ok","server":"mem-persistence","workspace":"/path/to/workspace"}
+```
+
+**Run as a background service (optional):**
+
+```bash
+# With pm2
+npm install -g pm2
+pm2 start "node dist/index.js --workspace /path/to/workspace --port 3456 --host 0.0.0.0" --name mem-persistence
+pm2 save && pm2 startup
+
+# Or with systemd (Linux)
+# See docs/systemd.md (coming soon)
+```
 
 MCP tools are available but agents won't use them proactively without instructions. Copy the contents of [`AGENT_INSTRUCTIONS.md`](AGENT_INSTRUCTIONS.md) into the right place for your editor:
 
@@ -226,6 +266,7 @@ Uses token similarity (Jaccard + containment), entity overlap (IDs, dates, versi
 - [x] MCP server (stdio transport) — 6 tools, TypeScript + ESM
 - [x] Embedding providers (Gemini free, OpenAI) with disk cache
 - [x] Request/response logging (.mem-persistence/logs/)
+- [x] HTTP transport for remote access (--port, Tailscale-friendly)
 - [ ] CLI (`mem-persistence search "query"`)
 - [ ] Local embeddings via transformers.js
 - [ ] npm publish
