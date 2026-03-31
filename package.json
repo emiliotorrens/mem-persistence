@@ -2,6 +2,7 @@
   "name": "mem-persistence",
   "version": "0.0.1",
   "description": "Persistent memory MCP server for AI agents — one memory, every agent, your files",
+  "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
@@ -29,7 +30,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/emiliotorrens/mem-persistence.git"
+    "url": "git+https://github.com/emiliotorrens/mem-persistence.git"
   },
   "homepage": "https://github.com/emiliotorrens/mem-persistence",
   "bugs": {
@@ -42,5 +43,13 @@
     "dist/",
     "README.md",
     "LICENSE"
-  ]
+  ],
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.2"
+  }
 }
