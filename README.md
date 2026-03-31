@@ -50,20 +50,36 @@ git clone https://github.com/emiliotorrens/mem-persistence.git
 cd mem-persistence && npm install && npm run build
 ```
 
-### Claude Code / Cursor
+### Claude Desktop
 
-Add to your MCP config (`~/.claude/claude_desktop_config.json`):
+Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
 
 ```json
 {
   "mcpServers": {
     "memory": {
-      "command": "mem-persistence",
-      "args": ["--workspace", "/path/to/your/workspace"]
+      "command": "npx",
+      "args": ["tsx", "/path/to/mem-persistence/src/index.ts", "--workspace", "/path/to/workspace"]
     }
   }
 }
 ```
+
+> **WSL users:** Use `"command": "wsl"` and prepend `"npx", "tsx", ...` to args.
+
+### Claude Code / Cursor
+
+Same config in `~/.claude/claude_desktop_config.json` or `.cursor/mcp.json`.
+
+### Agent Instructions
+
+The MCP tools are available but agents won't use them proactively without instructions. Copy from [`AGENT_INSTRUCTIONS.md`](AGENT_INSTRUCTIONS.md) into your agent's instruction file:
+
+- **Claude Code** → `CLAUDE.md`
+- **Cursor** → `.cursorrules`
+- **Windsurf** → `.windsurfrules`
+
+This tells the agent to search memory before answering, write important facts, and checkpoint at end of sessions.
 
 ### OpenClaw
 
@@ -122,7 +138,7 @@ Uses token similarity (Jaccard + containment), entity overlap (IDs, dates, versi
 
 - [x] Deduplication engine
 - [x] Hybrid search design (BM25 + vector + MMR + decay)
-- [ ] MCP server (stdio transport)
+- [x] MCP server (stdio transport) — 6 tools, TypeScript + ESM
 - [ ] CLI (`mem-persistence search "query"`)
 - [ ] Embedding providers (Gemini, OpenAI, local via transformers.js)
 - [ ] npm publish
