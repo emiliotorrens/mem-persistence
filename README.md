@@ -45,6 +45,12 @@ npm run build
 node dist/index.js --workspace /path/to/your/workspace --port 3456
 ```
 
+The `--workspace` path is the directory where your memory files live — your `MEMORY.md`, `memory/`, `reference/` folders, etc. This is the root that mem-persistence will index and search.
+
+Examples:
+- OpenClaw users: `~/.openclaw/workspace`
+- Custom setup: any directory with `.md` files you want the agent to remember
+
 **2. Add to Claude Desktop config**
 
 - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
