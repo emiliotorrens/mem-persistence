@@ -158,13 +158,50 @@ Claude Desktop spawns the server on demand. Easier to start with, but requires A
 
 > **WSL users (Windows):** replace `"command": "node"` with `"command": "wsl"` and add `"node"` as the first element of `args`.
 
-### Remote access via Tailscale
+### Remote access via Tailscale or VPN
 
-Access the same memory from a laptop, tablet, or any other machine using Tailscale or a private VPN.
+Access the same memory from a laptop, tablet, or any other machine using Tailscale, WireGuard, or any private VPN.
 
-> ⚠️ **Security:** mem-persistence has no built-in authentication. **Never expose the port to the public internet.** Always use Tailscale, a VPN, or a firewall rule to restrict access.
+> ⚠️ **Security:** mem-persistence has no built-in authentication. **Never expose the port to the public internet.** Always use `--bind` to restrict which interfaces the server listens on.
 
-In `ecosystem.config.cjs`, change `--host 127.0.0.1` to `--host 0.0.0.0` to listen on all interfaces. Then on the remote machine:
+Use `--bind` to control exactly which addresses the server binds to:
+
+```bash
+# Localhost + auto-detect Tailscale IP (recommended)
+node dist/index.js --workspace /path --port 3456 --bind 127.0.0.1,tailscale
+
+# Localhost + explicit VPN IP (WireGuard, OpenVPN, ZeroTier, etc.)
+node dist/index.js --workspace /path --port 3456 --bind 127.0.0.1,10.0.0.5
+
+# Multiple specific IPs
+node dist/index.js --workspace /path --port 3456 --bind 127.0.0.1,100.64.0.3,10.8.0.1
+
+# All interfaces (⚠️ only behind a firewall)
+node dist/index.js --workspace /path --port 3456 --bind all
+```
+
+**Special `--bind` values:**
+
+| Value | Resolves to |
+|---|---|
+| `localhost` | `127.0.0.1` |
+| `tailscale` | Auto-detected via `tailscale ip -4` (100.x.x.x) |
+| `all` / `0.0.0.0` | All network interfaces |
+| Any IP | Used as-is (e.g. `10.0.0.5`, `100.64.0.3`) |
+
+In `ecosystem.config.cjs`:
+
+```js
+args: '--workspace /path --port 3456 --bind 127.0.0.1,tailscale',
+```
+
+Or via environment variable:
+
+```bash
+MEM_PERSISTENCE_BIND=127.0.0.1,tailscale
+```
+
+Then on the remote machine (same tailnet or VPN):
 
 ```json
 {
@@ -177,6 +214,8 @@ In `ecosystem.config.cjs`, change `--host 127.0.0.1` to `--host 0.0.0.0` to list
 ```
 
 No API keys, no paths, no wsl. Just the URL. Embeddings are handled by the server.
+
+> **Why not `0.0.0.0`?** Binding to all interfaces exposes the server on your work/home LAN too. With `--bind 127.0.0.1,tailscale` you only listen on localhost and the Tailscale interface — your office network never sees the port.
 
 ---
 

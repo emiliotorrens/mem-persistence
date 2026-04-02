@@ -7,8 +7,9 @@ module.exports = {
     name: "mem-persistence",
     script: "/path/to/mem-persistence/dist/index.js",
     interpreter: "node",
-    args: "--workspace /path/to/your/workspace --port 3456 --host 127.0.0.1",
-    // Use --host 0.0.0.0 to expose over Tailscale/VPN (see README)
+    args: "--workspace /path/to/your/workspace --port 3456 --bind 127.0.0.1,tailscale",
+    // --bind accepts: localhost, tailscale (auto-detect), explicit IPs, all (0.0.0.0)
+    // Examples: "127.0.0.1,tailscale" | "127.0.0.1,10.0.0.5" | "all"
     env: {
       // Optional: enable semantic search (Gemini is free)
       // MEM_PERSISTENCE_EMBEDDINGS: "gemini",
