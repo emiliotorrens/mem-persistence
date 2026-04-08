@@ -48,9 +48,14 @@ npm run build
 node dist/index.js --workspace /path/to/your/workspace --port 3456
 ```
 
-**2. Point your client to it** — add to your client's MCP config:
+**2. Point your client to it**
 
-**Claude Desktop** (stdio only — does not support `url`):
+> **Claude Desktop vs Claude Code — key difference:**
+> Claude Desktop only supports stdio transport — it spawns mem-persistence as a local process, so **the server must be installed on the same machine as Desktop**. Claude Code supports HTTP transport, so it can connect to a remote server over Tailscale or a VPN — no local install needed on the client machine.
+
+---
+
+**Claude Desktop** — stdio, same machine only:
 - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
 - Windows: `%APPDATA%\Claude\claude_desktop_config.json`
 
@@ -76,7 +81,9 @@ node dist/index.js --workspace /path/to/your/workspace --port 3456
 
 > **Do not pass `--port`** in stdio mode — it causes `EADDRINUSE` if an HTTP instance is already running.
 
-**Claude Code / Cursor / Zed / any client that supports HTTP transport**:
+---
+
+**Claude Code** (and Cursor, Zed, or any client that supports HTTP transport) — can connect remotely:
 
 ```json
 {
@@ -87,6 +94,8 @@ node dist/index.js --workspace /path/to/your/workspace --port 3456
   }
 }
 ```
+
+If the server runs on a different machine, use its Tailscale hostname or VPN IP instead of `127.0.0.1`. See the [Remote access](#remote-access-via-tailscale-or-vpn) section below.
 
 **3. Add agent instructions** so the agent uses memory proactively:
 
