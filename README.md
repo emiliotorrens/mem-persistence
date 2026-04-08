@@ -253,6 +253,34 @@ No API keys, no paths, no wsl. Just the URL. Embeddings are handled by the serve
 
 > **Why not `0.0.0.0`?** Binding to all interfaces exposes the server on your work/home LAN too. With `--bind 127.0.0.1,tailscale` you only listen on localhost and the Tailscale interface — your office network never sees the port.
 
+### Remote Desktop access via proxy (stdio→HTTP)
+
+If Claude Desktop runs on a **different machine** (e.g., a laptop without mem-persistence installed), use the bundled `mcp-proxy.js` to bridge stdio to your remote HTTP server. Only requires Node.js on the client — no cloning, no `npm install`.
+
+1. Copy `mcp-proxy.js` to the laptop (just this one file — zero dependencies).
+2. Make sure Tailscale (or your VPN) is connected.
+3. Add to Claude Desktop config:
+
+```json
+{
+  "mcpServers": {
+    "memory": {
+      "command": "node",
+      "args": ["/path/to/mcp-proxy.js"],
+      "env": {
+        "MCP_REMOTE_URL": "http://work-linux.tailb5faba.ts.net:3456/mem-persistence/mcp"
+      }
+    }
+  }
+}
+```
+
+That’s it. Desktop thinks it’s talking to a local stdio server; the proxy forwards everything to your remote HTTP instance.
+
+Set `MCP_DEBUG=1` to log proxy traffic to stderr for troubleshooting.
+
+> **Limitation:** requires the remote server to be reachable. If the Tailscale connection is down or the server is off, Desktop will show a connection error.
+
 ---
 
 ## Embeddings (optional — but recommended)
