@@ -32,7 +32,6 @@ mem-persistence fixes this:
 ## Installation
 
 ```bash
-# From source (npm publish coming soon)
 git clone https://github.com/emiliotorrens/mem-persistence.git
 cd mem-persistence
 npm install
@@ -134,9 +133,9 @@ All clients use the same URL:
 
 Health check: `curl http://127.0.0.1:3456/health`
 
-### stdio mode
+### stdio mode (Claude Desktop)
 
-Claude Desktop spawns the server on demand. Easier to start with, but requires API keys in every client config and spawns a new process per window.
+Claude Desktop spawns the server on demand. Simpler to set up, but API keys must be in each client config and a new process is started per window.
 
 ```json
 {
@@ -157,6 +156,8 @@ Claude Desktop spawns the server on demand. Easier to start with, but requires A
 ```
 
 > **WSL users (Windows):** replace `"command": "node"` with `"command": "wsl"` and add `"node"` as the first element of `args`.
+
+> **Important:** do not pass `--port` in stdio mode. Claude Desktop does not support the `http` transport type — it spawns mem-persistence via stdio directly. Passing `--port` causes an `EADDRINUSE` conflict if an HTTP instance is already running.
 
 ### Remote access via Tailscale or VPN
 
@@ -264,6 +265,18 @@ Result: DUPLICATE (score: 0.90) — not written
 Uses token similarity (Jaccard + containment) and entity overlap (IDs, dates, versions, URLs).
 
 Adjust the threshold: `MEM_PERSISTENCE_DEDUP_THRESHOLD=0.65` (default — lower = stricter).
+
+---
+
+## OpenClaw integration
+
+If you use [OpenClaw](https://github.com/openclaw/openclaw), mem-persistence can coexist with OpenClaw's native memory system:
+
+- **Claude Desktop** → connect via stdio (no `--port`)
+- **Claude Code / remote machines** → connect via HTTP over Tailscale
+- **OpenClaw main session** → uses its native `memory-core` plugin with hybrid search + embeddings
+
+Both systems index the same Markdown files. mem-persistence is the MCP bridge for external clients; OpenClaw's native memory handles the agent's own recall and wiki compilation.
 
 ---
 
