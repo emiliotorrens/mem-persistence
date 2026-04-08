@@ -48,9 +48,35 @@ npm run build
 node dist/index.js --workspace /path/to/your/workspace --port 3456
 ```
 
-**2. Point your client to it** — add to Claude Desktop config:
+**2. Point your client to it** — add to your client's MCP config:
+
+**Claude Desktop** (stdio only — does not support `url`):
 - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
 - Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+
+```json
+{
+  "mcpServers": {
+    "memory": {
+      "command": "node",
+      "args": [
+        "/path/to/mem-persistence/dist/index.js",
+        "--workspace", "/path/to/your/workspace"
+      ],
+      "env": {
+        "MEM_PERSISTENCE_EMBEDDINGS": "gemini",
+        "GOOGLE_API_KEY": "your-key-here"
+      }
+    }
+  }
+}
+```
+
+> **WSL users (Windows):** replace `"command": "node"` with `"command": "wsl"` and add `"node"` as the first element of `args`.
+
+> **Do not pass `--port`** in stdio mode — it causes `EADDRINUSE` if an HTTP instance is already running.
+
+**Claude Code / Cursor / Zed / any client that supports HTTP transport**:
 
 ```json
 {
