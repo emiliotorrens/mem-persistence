@@ -23,7 +23,7 @@ You have access to a persistent memory system via MCP tools. Use it proactively:
 
 ### When starting a new session or task:
 - Call `memory_status` to see the current state of memory
-- Call `memory_read` with `path: "MEMORY.md"` for core context
+- Call `memory_read` with `path: "BOOTSTRAP.md"` for a compiled snapshot of recent context (replaces reading MEMORY.md + daily notes separately). Falls back to `path: "MEMORY.md"` if BOOTSTRAP.md doesn't exist.
 - Call `memory_search` with keywords related to the current task
 
 ### When ending a long session:
